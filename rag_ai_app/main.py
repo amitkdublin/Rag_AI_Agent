@@ -26,14 +26,12 @@ async def rag_ingest_pdf(ctx: inngest.Context):
     return {"hello": "world from RAG Ingest PDF Function!"}
 
 
-
 app = FastAPI()
-inngest.fast_api.serve(app, inngest_client, [])
+inngest.fast_api.serve(app, inngest_client, [rag_ingest_pdf])
 
 
 def main():
     print("Hello from rag-ai-app!")
-
 
 if __name__ == "__main__":
     main()
