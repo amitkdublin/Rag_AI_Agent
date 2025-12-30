@@ -9,12 +9,14 @@ import uuid
 import os
 import datetime
 
+import ollama
+
 from data_loader import load_and_chunk_pdf, embed_texts
 from vector_db import QdrantStorage
 from custom_types import RAGChunksAndSrc, RAGUpsertResult, RAGSearchResult, RAGQueryResult
 
 logger = logging.getLogger(__name__)
-
+# ollama_client = Client(host='http://localhost:11434')
 load_dotenv()  # Load environment variables from .env file
 inngest_client = inngest.Inngest(
     app_id = "rag_app",
@@ -66,7 +68,7 @@ async def rag_ingest_pdf(ctx: inngest.Context) -> RAGUpsertResult:
 )
 async def rag_query_pdf_ai(ctx: inngest.Context) -> RAGQueryResult:
     def _search(question: str, top_k: int = 5):
-        query_vec = embed_texts([question])[0]
+        query_vec = embed_texts([question])['embeddings'][0]
         store = QdrantStorage()
         found = store.search(query_vec, top_k)
         return RAGSearchResult(contexts=found["contexts"], sources=found["sources"])
@@ -83,37 +85,38 @@ async def rag_query_pdf_ai(ctx: inngest.Context) -> RAGQueryResult:
         f"Question: {question}\n"
         "Answer concisely using the context above."
     )
-
-    # Using OpenAI adapter; switch to ai.anthropic.Adapter if desired.
-    adapter = ai.openai.Adapter(
-        auth_key=os.getenv("OPENAI_API_KEY"),
-        model=os.getenv("OPENAI_RAG_MODEL", "gpt-4o-mini"),
-    )
-
-    res = await ctx.step.ai.infer(
-        "llm-answer",
-        adapter=adapter,
-        body={
-            "max_tokens": 1024,
-            "temperature": 0.2,
-            "messages": [
+    logger.info("****** Prompt Message: %s", user_content)
+    response = ollama.chat(
+        model="magistral",
+        messages=[
                 {"role": "system", "content": "You answer questions using only the provided context."},
                 {"role": "user", "content": user_content},
-            ],
-        },
+            ]
     )
-
-    answer = res["choices"][0]["message"]["content"].strip()
+    answer = response.message.content
+    logger.info("****** LLM answer complete")
 
     return {"answer": answer, "sources": found.sources[:top_k], "num_contexts": len(found.contexts)}
 
-
-
+    # res = await ctx.step.ai.infer(
+    #     "llm-answer",
+    #     adapter=adapter,
+    #     body={
+    #         "max_tokens": 1024,
+    #         "temperature": 0.2,
+    #         "messages": [
+    #             {"role": "system", "content": "You answer questions using only the provided context."},
+    #             {"role": "user", "content": user_content},
+    #         ],
+    #     },
+    # )
+    # answer = res["choices"][0]["message"]["content"].strip()
+    # return {"answer": answer, "sources": found.sources[:top_k], "num_contexts": len(found.contexts)}
 
 
 
 app = FastAPI()
-inngest.fast_api.serve(app, inngest_client, [rag_ingest_pdf])
+inngest.fast_api.serve(app, inngest_client, [rag_ingest_pdf, rag_query_pdf_ai])
 
 
 def main():
