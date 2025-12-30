@@ -16,8 +16,7 @@ from vector_db import QdrantStorage
 from custom_types import RAGChunksAndSrc, RAGUpsertResult, RAGSearchResult, RAGQueryResult
 
 logger = logging.getLogger(__name__)
-# ollama_client = Client(host='http://localhost:11434')
-load_dotenv()  # Load environment variables from .env file
+load_dotenv()
 inngest_client = inngest.Inngest(
     app_id = "rag_app",
     logger = logging.getLogger("uvicorn"),
@@ -32,10 +31,8 @@ inngest_client = inngest.Inngest(
 async def rag_ingest_pdf(ctx: inngest.Context) -> RAGUpsertResult:
     def _load(ctx: inngest.Context) -> RAGChunksAndSrc:
         pdf_path = ctx.event.data["pdf_path"]
-        logger.info("***** pdf_path=%s", pdf_path)
         source_id = ctx.event.data.get("source_id", pdf_path)
         chunks = load_and_chunk_pdf(pdf_path)
-        logger.info("***** chunks=%s", str(chunks))
         return RAGChunksAndSrc(chunks=chunks, source_id=source_id)
 
     def _upsert(chunks_and_src: RAGChunksAndSrc) -> RAGUpsertResult:
@@ -44,7 +41,6 @@ async def rag_ingest_pdf(ctx: inngest.Context) -> RAGUpsertResult:
         vecs = embed_texts(chunks)
         ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, f"{source_id}:{i}")) for i in range(len(chunks))]
         payloads = [{"source": source_id, "text": chunks[i]} for i in range(len(chunks))]
-        logger.info("****** ids=%s || vecs=%s || payloads=%s", str(ids), str(vecs), str(payloads))
         QdrantStorage().upsert(ids, vecs['embeddings'], payloads)
         return RAGUpsertResult(ingested=len(chunks))
     
@@ -85,7 +81,6 @@ async def rag_query_pdf_ai(ctx: inngest.Context) -> RAGQueryResult:
         f"Question: {question}\n"
         "Answer concisely using the context above."
     )
-    logger.info("****** Prompt Message: %s", user_content)
     response = ollama.chat(
         model="magistral",
         messages=[
@@ -94,30 +89,11 @@ async def rag_query_pdf_ai(ctx: inngest.Context) -> RAGQueryResult:
             ]
     )
     answer = response.message.content
-    logger.info("****** LLM answer complete")
-
     return {"answer": answer, "sources": found.sources[:top_k], "num_contexts": len(found.contexts)}
-
-    # res = await ctx.step.ai.infer(
-    #     "llm-answer",
-    #     adapter=adapter,
-    #     body={
-    #         "max_tokens": 1024,
-    #         "temperature": 0.2,
-    #         "messages": [
-    #             {"role": "system", "content": "You answer questions using only the provided context."},
-    #             {"role": "user", "content": user_content},
-    #         ],
-    #     },
-    # )
-    # answer = res["choices"][0]["message"]["content"].strip()
-    # return {"answer": answer, "sources": found.sources[:top_k], "num_contexts": len(found.contexts)}
-
 
 
 app = FastAPI()
 inngest.fast_api.serve(app, inngest_client, [rag_ingest_pdf, rag_query_pdf_ai])
-
 
 def main():
     print("Hello from rag-ai-app!")

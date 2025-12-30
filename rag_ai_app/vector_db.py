@@ -16,29 +16,17 @@ class QdrantStorage:
             )
 
     def upsert(self, ids, vectors, payloads):
-        logger.info("***** Number of items in ids: %d", len(ids))
-        logger.info("***** Number of items in VECTORs: %d", len(vectors))
         points = [PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i]) for i in range(len(ids))]
         logger.info('collection value=%s', self.collection)
-
         self.client.upsert(self.collection, points=points)
 
 
     def search(self, query_vector, top_k: int = 5):
-        # results = self.client.search(
-        #     collection_name=self.collection,
-        #     query_vector=query_vector,
-        #     limit=top_k,
-        #     with_payload=True,
-        # )
-
         results = self.client.query_points(
-            # here we go
             self.collection,
             query=query_vector
         ).points
 
-        logger.info("***** Results from Qdrant: %s", str(results))
         contexts = []
         sources = set()
 

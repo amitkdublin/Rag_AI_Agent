@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 EMBED_MODEL = "nomic-embed-text" 
-EMBED_DIM = 678 # 3072
+EMBED_DIM = 678
 
 splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=200)
 
@@ -18,12 +18,10 @@ def load_and_chunk_pdf(path: str):
         chunks.extend(splitter.split_text(t))
     return chunks
 
-# def embed_texts(texts: list[str]) -> list[list[float]]:
 def embed_texts(texts: list[str]) -> ollama.EmbedResponse:
     response = ollama.embed(
         model=EMBED_MODEL,
         input=texts,
         dimensions=EMBED_DIM,
     )
-    # return [item.embedding for item in response.data]
     return response
